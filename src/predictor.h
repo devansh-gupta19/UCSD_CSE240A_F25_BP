@@ -49,6 +49,13 @@ typedef enum {
     ST_3bit
 } BhtState_3bit;
 
+typedef enum {
+    SGlobal = 0,
+    WGlobal,
+    WLocal,
+    SLocal
+} ChoiceState;
+
 //------------------------------------//
 //      Predictor Configuration       //
 //------------------------------------//

@@ -45,6 +45,7 @@ uint64_t ghistory;
 uint16_t *localHistoryTable;
 uint8_t *bht_tournament;
 uint8_t *bht_global;
+uint8_t *choice_bht;
 uint16_t globalHistory;
 
 //------------------------------------//
@@ -127,6 +128,9 @@ void cleanup_gshare()
   free(bht_gshare);
 }
 
+
+
+
 // Tournament predictor functions
 
 void init_tournament()
@@ -136,6 +140,7 @@ void init_tournament()
   localHistoryTable = (uint16_t *)malloc(localHistoryEntries * sizeof(uint16_t));
   bht_tournament = (uint8_t *)malloc(localHistoryEntries * sizeof(uint8_t));
   bht_global = (uint8_t *)malloc(globalHistoryEntries * sizeof(uint8_t));
+  choice_bht = (uint8_t *)malloc(globalHistoryEntries * sizeof(uint8_t));
   int i = 0;
 
   for (i = 0; i < localHistoryEntries; i++)
@@ -146,6 +151,7 @@ void init_tournament()
   for (i = 0; i < globalHistoryEntries; i++)
   {
     bht_global[i] = WN;
+    choice_bht[i] = WLocal;
   }
   globalHistory = 0;
 }
@@ -195,10 +201,45 @@ uint8_t tournament_local_predict(uint32_t pc)
 
 uint8_t tournament_predict(uint32_t pc)
 {
-
+  uint8_t choice = choice_bht[globalHistory];
+  if (choice == SLocal || choice == WLocal)
+  {
+    return tournament_local_predict(pc);
+  }
+  else 
+  {
+    return tournament_global_predict(pc);
+  }
 }
 
-uint8_t train_tournament_global(uint32_t pc, uint8_t outcome)
+void train_tournament_choice(uint32_t pc, uint8_t outcome, uint8_t local_pred, uint8_t global_pred)
+{
+  // Update choice predictor
+  if (global_pred != local_pred)
+  {
+    switch (choice_bht[globalHistory])
+    {
+      // Update state of entry in bht based on outcome
+      case SGlobal:
+        choice_bht[globalHistory] = (global_pred == outcome && local_pred != outcome) ? SGlobal : WGlobal;
+        break;
+      case WGlobal:
+        choice_bht[globalHistory] = (global_pred == outcome && local_pred != outcome) ? SGlobal : WLocal;
+        break;
+      case WLocal:
+        choice_bht[globalHistory] = (global_pred == outcome && local_pred != outcome) ? WGlobal : SLocal;
+        break;
+      case SLocal:
+        choice_bht[globalHistory] = (global_pred == outcome && local_pred != outcome) ? WLocal : SLocal;
+        break;
+      default:
+        printf("Warning: Undefined state of entry in Choice BHT!\n");
+        break;
+    }
+  }
+}
+
+void train_tournament_global(uint32_t pc, uint8_t outcome)
 {
   // Update state of entry in bht based on outcome
   switch (bht_global[globalHistory])
@@ -269,6 +310,10 @@ void train_tournament_local(uint32_t pc, uint8_t outcome)
 
 void train_tournament(uint32_t pc, uint8_t outcome)
 {
+  uint8_t local_pred = tournament_local_predict(pc);
+  uint8_t global_pred = tournament_global_predict(pc);
+
+  train_tournament_choice(pc, outcome, local_pred, global_pred);
   train_tournament_global(pc, outcome);
   train_tournament_local(pc, outcome);
 }
