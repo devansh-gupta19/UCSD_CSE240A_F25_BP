@@ -12,9 +12,9 @@
 //
 // TODO:Student Information
 //
-const char *studentName = "TODO";
-const char *studentID = "TODO";
-const char *email = "TODO";
+const char *studentName = "Devansh Gupta";
+const char *studentID = "A69041198";
+const char *email = "d6gupta@ucsd.edu";
 
 //------------------------------------//
 //      Predictor Configuration       //
@@ -39,6 +39,11 @@ int verbose;
 // gshare
 uint8_t *bht_gshare;
 uint64_t ghistory;
+
+// tournament
+// Local Histrory Table of 1024 entries of 10 bits each
+uint16_t *localHistoryTable;
+uint8_t *bht_tournament;
 
 //------------------------------------//
 //        Predictor Functions         //
@@ -120,6 +125,95 @@ void cleanup_gshare()
   free(bht_gshare);
 }
 
+// Tournament predictor functions
+
+void init_tournament()
+{
+  uint32_t localHistoryEntries = 1024; // 10 bits for local history
+  localHistoryTable = (uint16_t *)malloc(localHistoryEntries * sizeof(uint16_t));
+  bht_tournament = (uint8_t *)malloc(localHistoryEntries * sizeof(uint8_t));
+  int i = 0;
+  for (i = 0; i < localHistoryEntries; i++)
+  {
+    localHistoryTable[i] = 0;
+    bht_tournament[i] = WN3_3bit;
+  }
+}
+
+uint8_t tournament_predict(uint32_t pc)
+{
+  // get lower localHistoryBits of pc
+  uint32_t bht_entries = 1024;
+  uint32_t index = pc & (bht_entries - 1);
+
+  switch (bht_tournament[localHistoryTable[index]])
+  {
+  case SN_3bit:
+  case WN1_3bit:
+  case WN2_3bit:
+  case WN3_3bit:
+    return NOTTAKEN;
+  case WT1_3bit:
+  case WT2_3bit:
+  case WT3_3bit:
+  case ST_3bit:
+    return TAKEN;
+  default:
+    printf("Warning: Undefined state of entry in GSHARE BHT!\n");
+    return NOTTAKEN;
+  }
+  return NOTTAKEN;
+}
+
+void train_tournament(uint32_t pc, uint8_t outcome)
+{
+    // get lower localHistoryBits of pc
+  uint32_t bht_entries = 1024;
+  uint32_t index = pc & (bht_entries - 1);
+
+  // Update state of entry in bht based on outcome
+  switch (bht_tournament[localHistoryTable[index]])
+  {
+    // SN_3bit, WN1_3bit, WN2_3bit, WN3_3bit, WT1_3bit, WT2_3bit, WT3_3bit, ST_3bit
+  case SN_3bit:
+    bht_tournament[localHistoryTable[index]] = (outcome == TAKEN) ? WN1_3bit : SN_3bit;
+    break;
+  case WN1_3bit:
+    bht_tournament[localHistoryTable[index]] = (outcome == TAKEN) ? WN2_3bit : SN_3bit;
+    break;
+  case WN2_3bit:
+    bht_tournament[localHistoryTable[index]] = (outcome == TAKEN) ? WN3_3bit : WN1_3bit;
+    break;
+  case WN3_3bit:
+    bht_tournament[localHistoryTable[index]] = (outcome == TAKEN) ? WT1_3bit : WN2_3bit;
+    break;
+  case WT1_3bit:
+    bht_tournament[localHistoryTable[index]] = (outcome == TAKEN) ? WT2_3bit : WN3_3bit;
+    break;
+  case WT2_3bit:
+    bht_tournament[localHistoryTable[index]] = (outcome == TAKEN) ? WT3_3bit : WT1_3bit;
+    break;
+  case WT3_3bit:
+    bht_tournament[localHistoryTable[index]] = (outcome == TAKEN) ? ST_3bit : WT2_3bit;
+    break;
+  case ST_3bit:
+    bht_tournament[localHistoryTable[index]] = (outcome == TAKEN) ? ST_3bit : WT3_3bit;
+    break;
+  default:
+    printf("Warning: Undefined state of entry in localHistoryTable BHT!\n");
+    break;
+  }
+
+  // Update history register
+  localHistoryTable[index] = ((localHistoryTable[index] << 1) | outcome) & 0x3FF; // keep only 10 bits
+}
+
+void cleanup_tournament()
+{
+  free(localHistoryTable);
+  free(bht_tournament);
+}
+
 void init_predictor()
 {
   switch (bpType)
@@ -130,6 +224,7 @@ void init_predictor()
     init_gshare();
     break;
   case TOURNAMENT:
+    init_tournament();
     break;
   case CUSTOM:
     break;

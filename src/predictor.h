@@ -38,6 +38,17 @@ extern const char *bpName[];
 #define WT 2 // predict T, weak taken
 #define ST 3 // predict T, strong taken
 
+typedef enum {
+    SN_3bit = 0,
+    WN1_3bit,
+    WN2_3bit,
+    WN3_3bit,
+    WT1_3bit,
+    WT2_3bit,
+    WT3_3bit,
+    ST_3bit
+} BhtState_3bit;
+
 //------------------------------------//
 //      Predictor Configuration       //
 //------------------------------------//

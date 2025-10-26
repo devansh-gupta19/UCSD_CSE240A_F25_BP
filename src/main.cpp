@@ -13,6 +13,40 @@ FILE *stream;
 char *buf = NULL;
 size_t len = 0;
 
+#ifdef _WIN32
+// Windows fallback for getline
+ssize_t getline(char **lineptr, size_t *n, FILE *stream) {
+    if (!lineptr || !n || !stream) return -1;
+
+    const size_t chunk = 128;
+    size_t pos = 0;
+
+    if (*lineptr == nullptr || *n == 0) {
+        *n = chunk;
+        *lineptr = (char *)malloc(*n);
+        if (!*lineptr) return -1;
+    }
+
+    int c;
+    while ((c = fgetc(stream)) != EOF) {
+        if (pos + 1 >= *n) {
+            *n += chunk;
+            char *newbuf = (char *)realloc(*lineptr, *n);
+            if (!newbuf) return -1;
+            *lineptr = newbuf;
+        }
+        (*lineptr)[pos++] = c;
+        if (c == '\n') break;
+    }
+
+    if (pos == 0 && c == EOF) return -1;
+
+    (*lineptr)[pos] = '\0';
+    return (ssize_t)pos;
+}
+#endif
+
+
 // Print out the Usage information to stderr
 //
 void usage()
