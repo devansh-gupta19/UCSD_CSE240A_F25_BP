@@ -44,6 +44,8 @@ uint64_t ghistory;
 // Local Histrory Table of 1024 entries of 10 bits each
 uint16_t *localHistoryTable;
 uint8_t *bht_tournament;
+uint8_t *bht_global;
+uint16_t globalHistory;
 
 //------------------------------------//
 //        Predictor Functions         //
@@ -130,17 +132,43 @@ void cleanup_gshare()
 void init_tournament()
 {
   uint32_t localHistoryEntries = 1024; // 10 bits for local history
+  uint32_t globalHistoryEntries = 4096; // 12 bits for global history
   localHistoryTable = (uint16_t *)malloc(localHistoryEntries * sizeof(uint16_t));
   bht_tournament = (uint8_t *)malloc(localHistoryEntries * sizeof(uint8_t));
+  bht_global = (uint8_t *)malloc(globalHistoryEntries * sizeof(uint8_t));
   int i = 0;
+
   for (i = 0; i < localHistoryEntries; i++)
   {
     localHistoryTable[i] = 0;
     bht_tournament[i] = WN3_3bit;
   }
+  for (i = 0; i < globalHistoryEntries; i++)
+  {
+    bht_global[i] = WN;
+  }
+  globalHistory = 0;
 }
 
-uint8_t tournament_predict(uint32_t pc)
+uint8_t tournament_global_predict(uint32_t pc)
+{
+  switch (bht_global[globalHistory])
+  {
+  case WN:
+    return NOTTAKEN;
+  case SN:
+    return NOTTAKEN;
+  case WT:
+    return TAKEN;
+  case ST:
+    return TAKEN;
+  default:
+    printf("Warning: Undefined state of entry in Global BHT!\n");
+    return NOTTAKEN;
+  }
+}
+
+uint8_t tournament_local_predict(uint32_t pc)
 {
   // get lower localHistoryBits of pc
   uint32_t bht_entries = 1024;
@@ -165,7 +193,38 @@ uint8_t tournament_predict(uint32_t pc)
   return NOTTAKEN;
 }
 
-void train_tournament(uint32_t pc, uint8_t outcome)
+uint8_t tournament_predict(uint32_t pc)
+{
+
+}
+
+uint8_t train_tournament_global(uint32_t pc, uint8_t outcome)
+{
+  // Update state of entry in bht based on outcome
+  switch (bht_global[globalHistory])
+  {
+  case WN:
+    bht_global[globalHistory] = (outcome == TAKEN) ? WT : SN;
+    break;
+  case SN:
+    bht_global[globalHistory] = (outcome == TAKEN) ? WN : SN;
+    break;
+  case WT:
+    bht_global[globalHistory] = (outcome == TAKEN) ? ST : WN;
+    break;
+  case ST:
+    bht_global[globalHistory] = (outcome == TAKEN) ? ST : WT;
+    break;
+  default:
+    printf("Warning: Undefined state of entry in Global BHT!\n");
+    break;
+  }
+
+  // Update history register
+  globalHistory = ((globalHistory << 1) | outcome) & 0xFFF; // keep only 12 bits
+}
+
+void train_tournament_local(uint32_t pc, uint8_t outcome)
 {
     // get lower localHistoryBits of pc
   uint32_t bht_entries = 1024;
@@ -208,10 +267,17 @@ void train_tournament(uint32_t pc, uint8_t outcome)
   localHistoryTable[index] = ((localHistoryTable[index] << 1) | outcome) & 0x3FF; // keep only 10 bits
 }
 
+void train_tournament(uint32_t pc, uint8_t outcome)
+{
+  train_tournament_global(pc, outcome);
+  train_tournament_local(pc, outcome);
+}
+
 void cleanup_tournament()
 {
   free(localHistoryTable);
   free(bht_tournament);
+  free(bht_global);
 }
 
 void init_predictor()
@@ -248,7 +314,7 @@ uint32_t make_prediction(uint32_t pc, uint32_t target, uint32_t direct)
   case GSHARE:
     return gshare_predict(pc);
   case TOURNAMENT:
-    return NOTTAKEN;
+    return tournament_predict(pc);
   case CUSTOM:
     return NOTTAKEN;
   default:
@@ -275,7 +341,7 @@ void train_predictor(uint32_t pc, uint32_t target, uint32_t outcome, uint32_t co
     case GSHARE:
       return train_gshare(pc, outcome);
     case TOURNAMENT:
-      return;
+      return train_tournament(pc, outcome);
     case CUSTOM:
       return;
     default:
