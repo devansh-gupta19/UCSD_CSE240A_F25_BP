@@ -24,6 +24,7 @@ extern const char *email;
 //------------------------------------//
 #define NOTTAKEN 0
 #define TAKEN 1
+#define NOTAPPLICABLE 2
 
 // The Different Predictor Types
 #define STATIC 0
@@ -55,6 +56,13 @@ typedef enum {
     WLocal,
     SLocal
 } ChoiceState;
+
+typedef enum {
+    U0 = 0,
+    U1,
+    U2,
+    U3
+} entryUsefulness;
 
 //------------------------------------//
 //      Predictor Configuration       //
